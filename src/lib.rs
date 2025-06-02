@@ -4,8 +4,10 @@ mod utilities;
 pub struct Number(pub i32);
 
 impl Number {
-    pub fn new(slice: &str) -> Self {
-        Self(slice.parse().unwrap())
+    pub fn new(slice: &str) -> (&str, Self) {
+        let (slice, number) = utilities::extract_digits(slice);
+
+        (slice, Self(number.parse().unwrap()))
     }
 }
 
@@ -18,14 +20,18 @@ pub enum Operation {
 }
 
 impl Operation {
-    pub fn new(slice: &str) -> Self {
-        match slice {
+    pub fn new(slice: &str) -> (&str, Self) {
+        let (slice, operation) = utilities::extract_operation(slice);
+
+        let operation = match operation {
             "+" => Self::Add,
             "-" => Self::Sub,
             "*" => Self::Mul,
             "/" => Self::Div,
-            _ => panic!("Bad operator"),
-        }
+            _ => unreachable!(),
+        };
+
+        (slice, operation)
     }
 }
 
@@ -37,12 +43,14 @@ pub struct Expression {
 }
 
 impl Expression {
-    pub fn new(slice: &str) -> Self {
-        let operand = Number::new(slice);
-        let operator = Number::new(slice);
-        let operation = Operation::new(slice);
+    pub fn new(slice: &str) -> (&str, Self) {
+        let (slice, operand) = Number::new(slice);
+        let (slice, _) = utilities::extract_whitespace(slice);
+        let (slice, operation) = Operation::new(slice);
+        let (slice, _) = utilities::extract_whitespace(slice);
+        let (slice, operator) = Number::new(slice);
 
-        Self { operand, operator, operation }
+        (slice, Self { operand, operator, operation })
     }
 }
 
@@ -52,38 +60,41 @@ mod tests {
 
     #[test]
     fn parse_number() {
-        assert_eq!(Number::new("123"), Number(123));
+        assert_eq!(Number::new("123"), ("", Number(123)));
     }
 
     #[test]
     fn parse_add_operation() {
-        assert_eq!(Operation::new("+"), Operation::Add)
+        assert_eq!(Operation::new("+"), ("", Operation::Add));
     }
 
     #[test]
     fn parse_subtract_operation() {
-        assert_eq!(Operation::new("-"), Operation::Sub)
+        assert_eq!(Operation::new("-"), ("", Operation::Sub));
     }
 
     #[test]
     fn parse_multiply_operation() {
-        assert_eq!(Operation::new("*"), Operation::Mul)
+        assert_eq!(Operation::new("*"), ("", Operation::Mul));
     }
 
     #[test]
     fn parse_divide_operation() {
-        assert_eq!(Operation::new("/"), Operation::Div)
+        assert_eq!(Operation::new("/"), ("", Operation::Div));
     }
 
     #[test]
     fn parse_one_plus_two() {
         assert_eq!(
             Expression::new("1+2"),
-            Expression {
-                operand: Number(1),
-                operator: Number(2),
-                operation: Operation::Add,
-            }
-        )
+            (
+                "", 
+                Expression {
+                    operand: Number(1),
+                    operator: Number(2),
+                    operation: Operation::Add,
+                },
+            )
+        );
     }
 }
