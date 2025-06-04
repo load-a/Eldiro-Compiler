@@ -1,29 +1,52 @@
 // #[derive(Debug, PartialEq)]
-pub(crate) fn extract_digits(slice: &str) -> (&str, &str) {
-    take_while(|character| character.is_ascii_digit(), slice)
+
+pub(crate) fn tag<'a, 'b>(keyword: &'a str, source: &'b str) -> &'b str {
+    if source.starts_with(keyword) {
+        &source[keyword.len()..]
+    } else {
+        panic!("Expected {}", keyword)
+    }
 }
 
-pub(crate) fn extract_operation(slice: &str) -> (&str, &str) {
-    match &slice[0..1] {
+pub(crate) fn extract_digits(source: &str) -> (&str, &str) {
+    take_while(|character| character.is_ascii_digit(), source)
+}
+
+pub(crate) fn extract_operation(source: &str) -> (&str, &str) {
+    match &source[0..1] {
         "+" | "-" | "*" | "/" => {},
         _ => panic!("Bad operator"),
     }
 
-    (&slice[1..], &slice[0..1])
+    (&source[1..], &source[0..1])
 }
 
-pub(crate) fn extract_whitespace(slice: &str) -> (&str, &str) {
-    take_while(|character| character == ' ', slice)
+pub(crate) fn extract_whitespace(source: &str) -> (&str, &str) {
+    take_while(|character| character == ' ', source)
 }
 
-fn take_while(accept: impl Fn(char) -> bool, slice: &str) -> (&str, &str) {
-    let extracted_end = slice
+pub(crate) fn extract_identitifier(source: &str) -> (&str, &str) {
+    let input_start_is_alphanumeric = source
+        .chars()
+        .next()
+        .map(|character| character.is_ascii_alphabetic())
+        .unwrap_or(false);
+
+    if input_start_is_alphanumeric {
+        take_while(|character| character.is_ascii_alphanumeric(), source)
+    } else {
+        (source, "")
+    }
+}
+
+fn take_while(accept: impl Fn(char) -> bool, source: &str) -> (&str, &str) {
+    let extracted_end = source
             .char_indices()
             .find_map(|(index, character)| if accept(character) { None } else { Some(index) })
-            .unwrap_or_else(|| slice.len());
+            .unwrap_or_else(|| source.len());
 
-    let extracted = &slice[0..extracted_end];
-    let remainder = &slice[extracted_end..];
+    let extracted = &source[0..extracted_end];
+    let remainder = &source[extracted_end..];
 
     (remainder, extracted)
 }
@@ -75,5 +98,15 @@ mod tests {
     #[test]
     fn extract_spaces() {
         assert_eq!(extract_whitespace("   abcd"), ("abcd", "   "));
+    }
+
+    #[test]
+    fn cannot_extract_numeric_identifier() {
+        assert_eq!(extract_identitifier("123abc"), ("123abc", ""));
+    }
+
+    #[test]
+    fn tag_keyword() {
+        assert_eq!(tag("let", "let a = 5"), " a = 5")
     }
 }
