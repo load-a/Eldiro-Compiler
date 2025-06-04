@@ -2,35 +2,49 @@ use crate::utilities;
 use crate::value::Value;
 
 #[derive(Debug, PartialEq)]
-pub struct Expression {
-    pub operand: Number,
-    pub operator: Number,
-    pub operation: Operation,
+pub enum Expression {
+    Number(Number),
+    BinaryOperation { operand: Number, operator: Number, operation: Operation }
 }
 
 impl Expression {
-    pub fn new(source: &str) -> (&str, Self) {
-        let (source, operand) = Number::new(source);
-        let (source, _) = utilities::extract_whitespace(source);
-        let (source, operation) = Operation::new(source);
-        let (source, _) = utilities::extract_whitespace(source);
-        let (source, operator) = Number::new(source);
+    pub fn new(source: &str) -> Result<(&str, Self), String> {
+        Self::new_binary_operation(source).or_else(|_| Self::new_number(source))
+    }
 
-        (source, Self { operand, operator, operation })
+    fn new_binary_operation(source: &str) -> Result<(&str, Self), String> {
+        let (source, operand) = Number::new(source)?;
+        let (source, _) = utilities::extract_whitespace(source);
+
+        let (source, operation) = Operation::new(source)?;
+        let (source, _) = utilities::extract_whitespace(source);
+
+        let (source, operator) = Number::new(source)?;
+
+        Ok((source, Self::BinaryOperation { operand, operator, operation }))
+    }
+
+    fn new_number(source: &str) -> Result<(&str, Self), String> {
+        Number::new(source).map(|(source, number)| (source, Self::Number(number)))
     }
 
     pub fn evaluate(&self) -> Value {
-        let Number(operand) = self.operand;
-        let Number(operator) = self.operator;
+        match self {
+            Self::Number(Number(n)) => Value::Number(*n),
+            Self::BinaryOperation { operand, operator, operation } => {
+                let Number(operand) = operand;
+                let Number(operator) = operator;
 
-        let result = match self.operation {
-            Operation::Add => operand + operator,
-            Operation::Sub => operand - operator,
-            Operation::Mul => operand * operator,
-            Operation::Div => operand / operator,
-        };
+                let result = match operation {
+                    Operation::Add => operand + operator,
+                    Operation::Sub => operand - operator,
+                    Operation::Mul => operand * operator,
+                    Operation::Div => operand / operator,
+                };
 
-        Value::Number(result)
+                Value::Number(result)
+            },
+        }
     }
 }
 
@@ -38,10 +52,10 @@ impl Expression {
 pub struct Number(pub i32);
 
 impl Number {
-    pub fn new(source: &str) -> (&str, Self) {
-        let (source, number) = utilities::extract_digits(source);
+    pub fn new(source: &str) -> Result<(&str, Self), String> {
+        let (source, number) = utilities::extract_digits(source)?;
 
-        (source, Self(number.parse().unwrap()))
+        Ok((source, Self(number.parse().unwrap())))
     }
 }
 
@@ -54,18 +68,12 @@ pub enum Operation {
 }
 
 impl Operation {
-    pub fn new(source: &str) -> (&str, Self) {
-        let (source, operation) = utilities::extract_operation(source);
-
-        let operation = match operation {
-            "+" => Self::Add,
-            "-" => Self::Sub,
-            "*" => Self::Mul,
-            "/" => Self::Div,
-            _ => unreachable!(),
-        };
-
-        (source, operation)
+    pub fn new(source: &str) -> Result<(&str, Self), String> {
+        utilities::tag("+", source)
+            .map(|source| (source, Self::Add))
+            .or_else(|_| utilities::tag("-", source).map(|source| (source, Self::Sub)))
+            .or_else(|_| utilities::tag("*", source).map(|source| (source, Self::Mul)))
+            .or_else(|_| utilities::tag("/", source).map(|source| (source, Self::Div)))
     }
 }
 
@@ -75,48 +83,63 @@ mod tests {
 
     #[test]
     fn parse_number() {
-        assert_eq!(Number::new("123"), ("", Number(123)));
+        assert_eq!(Number::new("123"), Ok(("", Number(123))));
     }
 
     #[test]
     fn parse_add_operation() {
-        assert_eq!(Operation::new("+"), ("", Operation::Add));
+        assert_eq!(Operation::new("+"), Ok(("", Operation::Add)));
     }
 
     #[test]
     fn parse_subtract_operation() {
-        assert_eq!(Operation::new("-"), ("", Operation::Sub));
+        assert_eq!(Operation::new("-"), Ok(("", Operation::Sub)));
     }
 
     #[test]
     fn parse_multiply_operation() {
-        assert_eq!(Operation::new("*"), ("", Operation::Mul));
+        assert_eq!(Operation::new("*"), Ok(("", Operation::Mul)));
     }
 
     #[test]
     fn parse_divide_operation() {
-        assert_eq!(Operation::new("/"), ("", Operation::Div));
+        assert_eq!(Operation::new("/"), Ok(("", Operation::Div)));
     }
 
     #[test]
     fn parse_one_plus_two() {
         assert_eq!(
             Expression::new("1+2"),
-            (
+            Ok((
                 "", 
-                Expression {
+                Expression::BinaryOperation {
                     operand: Number(1),
                     operator: Number(2),
                     operation: Operation::Add,
                 },
-            )
+            ))
+        );
+    }
+
+    #[test]
+    fn parse_one_plus_two_with_whitespace() {
+        assert_eq!(
+            Expression::new("1 +   2"),
+            Ok((
+                "", 
+                Expression::BinaryOperation {
+                    operand: Number(1),
+                    operator: Number(2),
+                    operation: Operation::Add,
+                },
+            ))
         );
     }
 
     #[test]
     fn evaluate_add() {
         assert_eq!(
-            Expression {
+            Expression::BinaryOperation {
                 operand: Number(10),
                 operator: Number(5),
                 operation: Operation::Add,
@@ -129,7 +152,7 @@ mod tests {
     #[test]
     fn evaluate_subtract() {
         assert_eq!(
-            Expression {
+            Expression::BinaryOperation {
                 operand: Number(10),
                 operator: Number(5),
                 operation: Operation::Sub,
@@ -142,7 +165,7 @@ mod tests {
     #[test]
     fn evaluate_multiply() {
         assert_eq!(
-            Expression {
+            Expression::BinaryOperation {
                 operand: Number(10),
                 operator: Number(5),
                 operation: Operation::Mul,
@@ -155,7 +178,7 @@ mod tests {
     #[test]
     fn evaluate_divide() {
         assert_eq!(
-            Expression {
+            Expression::BinaryOperation {
                 operand: Number(10),
                 operator: Number(5),
                 operation: Operation::Div,
@@ -163,5 +186,10 @@ mod tests {
             .evaluate(),
             Value::Number(2)
         )
+    }
+
+    #[test]
+    fn parse_number_expression() {
+        assert_eq!(Expression::new("456"), Ok(("", Expression::Number(Number(456)))))
     }
 }

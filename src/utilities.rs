@@ -1,15 +1,15 @@
 // #[derive(Debug, PartialEq)]
 
-pub(crate) fn tag<'a, 'b>(keyword: &'a str, source: &'b str) -> &'b str {
+pub(crate) fn tag<'a, 'b>(keyword: &'a str, source: &'b str) -> Result<&'b str, String> {
     if source.starts_with(keyword) {
-        &source[keyword.len()..]
+        Ok(&source[keyword.len()..])
     } else {
-        panic!("Expected {}", keyword)
+        Err(format!("Expected {}", keyword))
     }
 }
 
-pub(crate) fn extract_digits(source: &str) -> (&str, &str) {
-    take_while(|character| character.is_ascii_digit(), source)
+pub(crate) fn extract_digits(source: &str) -> Result<(&str, &str), String> {
+    take_only(|character| character.is_ascii_digit(), source, "Expected digits".to_string())
 }
 
 pub(crate) fn extract_operation(source: &str) -> (&str, &str) {
@@ -25,7 +25,11 @@ pub(crate) fn extract_whitespace(source: &str) -> (&str, &str) {
     take_while(|character| character == ' ', source)
 }
 
-pub(crate) fn extract_identitifier(source: &str) -> (&str, &str) {
+pub(crate) fn require_whitespace(source: &str) -> Result<(&str, &str), String> {
+    take_only(|character| character == ' ', source, "Expected whitespace".to_string())
+}
+
+pub(crate) fn extract_identitifier(source: &str) -> Result<(&str, &str), String> {
     let input_start_is_alphanumeric = source
         .chars()
         .next()
@@ -33,9 +37,9 @@ pub(crate) fn extract_identitifier(source: &str) -> (&str, &str) {
         .unwrap_or(false);
 
     if input_start_is_alphanumeric {
-        take_while(|character| character.is_ascii_alphanumeric(), source)
+        Ok(take_while(|character| character.is_ascii_alphanumeric(), source))
     } else {
-        (source, "")
+        Err("Expected identifier".to_string())
     }
 }
 
@@ -51,28 +55,42 @@ fn take_while(accept: impl Fn(char) -> bool, source: &str) -> (&str, &str) {
     (remainder, extracted)
 }
 
+pub(crate) fn take_only(
+    accept: impl Fn(char) -> bool, 
+    source: &str, 
+    error_message: String
+) -> Result<(&str, &str), String> {
+    let (remainder, extracted) = take_while(accept, source);
+
+    if extracted.is_empty() {
+        Err(error_message)
+    } else {
+        Ok((remainder, extracted))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn extract_one_digit() {
-        assert_eq!(extract_digits("1+2"), ("+2", "1"));
+        assert_eq!(extract_digits("1+2"), Ok(("+2", "1")));
     }
 
     #[test]
     fn extract_multiple_digit() {
-        assert_eq!(extract_digits("10+20"), ("+20", "10"));
+        assert_eq!(extract_digits("10+20"), Ok(("+20", "10")));
     }
 
     #[test]
-    fn extract_no_digits() {
-        assert_eq!(extract_digits(""), ("", ""));
+    fn extract_digits_from_invalid_input() {
+        assert_eq!(extract_digits(""), Err("Expected digits".to_string()));
     }
 
     #[test]
     fn extract_only_digits() {
-        assert_eq!(extract_digits("1000"), ("", "1000"));
+        assert_eq!(extract_digits("1000"), Ok(("", "1000")));
     }
 
     #[test]
@@ -101,12 +119,27 @@ mod tests {
     }
 
     #[test]
+    fn extract_alphabetic_identifier() {
+        assert_eq!(extract_identitifier("abc"), Ok(("", "abc")));
+    }
+
+    #[test]
+    fn extract_alphanumeric_identifier() {
+        assert_eq!(extract_identitifier("abc123"), Ok(("", "abc123")));
+    }
+
+    #[test]
     fn cannot_extract_numeric_identifier() {
-        assert_eq!(extract_identitifier("123abc"), ("123abc", ""));
+        assert_eq!(extract_identitifier("123abc"), Err("Expected identifier".to_string()));
     }
 
     #[test]
     fn tag_keyword() {
-        assert_eq!(tag("let", "let a = 5"), " a = 5")
+        assert_eq!(tag("let", "let a = 5"), Ok(" a = 5"));
+    }
+
+    #[test]
+    fn extract_required_whitespace() {
+        assert_eq!(require_whitespace(""), Err("Expected whitespace".to_string()))
     }
 }

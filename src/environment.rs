@@ -16,8 +16,8 @@ impl Environment {
 mod tests {
     use super::*;
     
-    #[test]
-    fn store_new_binding() {
-        todo!()
-    }
+    // #[test]
+    // fn store_new_binding() {
+    //     todo!()
+    // }
 }

@@ -9,19 +9,19 @@ pub struct BindingDefinition {
 }
 
 impl BindingDefinition {
-    pub fn new(source: &str) -> (&str, Self) {
-        let source = utilities::tag("let", source);
+    pub fn new(source: &str) -> Result<(&str, Self), String> {
+        let source = utilities::tag("let", source)?;
+        let (source, _) = utilities::require_whitespace(source)?;
+
+        let (source, name) = utilities::extract_identitifier(source)?;
         let (source, _) = utilities::extract_whitespace(source);
 
-        let (source, name) = utilities::extract_identitifier(source);
+        let source = utilities::tag("=", source)?;
         let (source, _) = utilities::extract_whitespace(source);
 
-        let source = utilities::tag("=", source);
-        let (source, _) = utilities::extract_whitespace(source);
+        let (source, value) = Expression::new(source)?;
 
-        let (source, value) = Expression::new(source);
-
-        (source, Self {name: name.to_string(), value: value})
+        Ok((source, Self {name: name.to_string(), value: value}))
     }
 
     pub(crate) fn evaluate(&self, environment: &mut Environment) {
@@ -35,19 +35,19 @@ mod tests {
     use crate::expression::{Number, Operation};
 
     #[test]
-    fn parse_binding() {
+    fn parse_binding_definition() {
         assert_eq!(BindingDefinition::new("let a = 10 / 2"), 
-            (
+            Ok((
                 "",
                 BindingDefinition {
                     name: "a".to_string(),
-                    value: Expression {
+                    value: Expression::BinaryOperation {
                         operand: Number(10),
                         operator: Number(2),
                         operation: Operation::Div,
                     }
-                }
-            )
+                },
+            ))
         )
     }
 }
